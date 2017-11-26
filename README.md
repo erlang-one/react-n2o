@@ -29,8 +29,7 @@ const mqtt = new mq()
 mqtt.start({ host: 'localhost', protocols: [ proto.io ]})
 let mes = bert.enc(bert.tuple(bert.atom('SynData'),bert.number(234)))
 mqtt.send(mes)
-
-}
+```
 
 ## API
 
@@ -115,5 +114,5 @@ npm link react-n2o
 
 ## Credits
 
-Andrey Martemyanov
-Maxim Sokhatsky
+* Andrey Martemyanov
+* Maxim Sokhatsky

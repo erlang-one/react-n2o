@@ -1,0 +1,15 @@
+{
+	"name": "react-n2o",
+	"version": "0.0.9",
+	"description": "N2O library for React (WS + MQTT)",
+	"main": "./index.js",
+	"dependencies": {},
+	"scripts": {
+		"test": "babel-node ./test.js"
+	},
+	"devDependencies": {
+		"babel-preset-env": "^1.6.1",
+		"prop-types": "^15.6.0",
+		"text-encoding": "^0.6.4"
+	}
+}

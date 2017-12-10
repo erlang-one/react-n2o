@@ -5,6 +5,7 @@
 import Paho from 'paho-client'
 import bert from './bert'
 import proto from './proto'
+import n2o from './n2o'
 
 window.debug = window.debug || false;
 
@@ -25,17 +26,19 @@ export default class mq {
     }
     
     static decode(s) { return decodeURIComponent(s.replace(/\+/g, " ")); }
-    static log(...o)    { window.debug && console.log(...o) }
+    static log(...o)    { window.debug && console.log('[mq] ', ...o) }
     
     start(c) {
         c && this.init(c)
+        
+        mq.log('protocols: ', this.protocols)
         let match, query = window.location.search.substring(1),
             params = {}
         while ((match = (/([^&=]+)=?([^&]*)/g).exec(query))) {
             params[mq.decode(match[1])] = mq.decode(match[2])
         }
         
-        this.channel = new Paho.Client(this.host, this.port, this.client)
+        this.channel = new Paho.Client(this.host, this.port, this.client())
 
         this.channel.onConnectionLost = (o) => { mq.log(`n2o [mqtt] connection lost: ${o.errorMessage}`) }
         this.channel.onMessageArrived = (m) => {
@@ -47,33 +50,34 @@ export default class mq {
             }
             catch (e) { console.log(e) }
         }
-        this.channel.connect(this.options)
-        
-        window.mq = this
-        window.bert = bert
+        this.channel.connect(this.options())
     }
     
     stop() {
         console.log('n2o [mqtt] stop handler not implemented')
     }
     
-    get options() { return { timeout: 2, userName: this.module, password: this.token, cleanSession: false,
+    options() { return {
+        timeout: 2,
+        userName: this.module,
+        password: this.token(),
+        cleanSession: false,
         onSuccess: () => {
             mq.log("n2o [mqtt] connected ")
-            this.send(bert.enc(bert.tuple(bert.atom('init'),bert.bin(this.token)))) },
+            this.send(bert.enc(bert.tuple(bert.atom('init'),bert.bin(this.token())))) },
         onFailure: (m) => { mq.log("n2o [mqtt] connection failed: " + m.errorMessage) }
     } }
     
-    get client() {
+    client() {
         let c = localStorage.getItem('client')
-        localStorage.setItem('client', c === null ? `emqttd_${this.gen_client}` : c)
+        if (c === null) c = `emqttd_${n2o.uuid4()}`
+        localStorage.setItem('client', c)
         return c 
     }
-    get gen_client()  { return Math.random().toString(36).substring(2) + (new Date()).getTime().toString(36) }
-    get token()       { return localStorage.getItem('token') || '' }
-    get pageModule()  { return this.module || 'api' }
-    get rnd()         { return Math.floor((Math.random() * this.nodes) + 1) }
-    topic(prefix)     { return `${prefix}/1/${this.rnd}/${this.pageModule}/anon/${this.client}/${this.token}` }
+    rnd()         { return Math.floor((Math.random() * this.nodes) + 1) }
+    topic(prefix) { return `${prefix}/1/${this.rnd()}/${this.pageModule()}/anon/${this.client()}/${this.token()}` }
+    token()       { return localStorage.getItem('token') || '' }
+    pageModule()  { return this.module || 'api' }
     
     send(payload, qos = 2) {
         var m = new Paho.Message(payload)

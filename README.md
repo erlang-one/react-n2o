@@ -75,7 +75,7 @@ let myProto = {
     }
 }
 
-export default erlachProto
+export default myProto
 ```
 
 ## Testing

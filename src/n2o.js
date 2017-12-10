@@ -9,11 +9,10 @@ import bert from './bert'
 window.debug = window.debug || false;
 
 export default class n2o {
-    constructor({session, host, port, protocols}) {
+    constructor({ session, host, port, protocols, ssl = true, qs }) {
         this.active = false
         this.session = session || "site-sid"
-        this.schema = window.location.protocol === 'https:' ? "wss://" : "ws://"
-        this.querystring = window.location.pathname + window.location.search
+        this.querystring = qs || `/ws${window.location.pathname}${window.location.search}`
         this.host = host || window.location.hostname
         this.port = port ? `:${port}` : ''
         this.protocols = protocols || [ proto.io ];
@@ -29,7 +28,7 @@ export default class n2o {
     }
     
     start() {
-        let url = `${this.schema}${this.host}${this.port}/ws${this.querystring}`
+        let url = `${this.ssl ? "wss://" : "ws://"}${this.host}${this.port}${this.querystring}`
         let onmessage = (evt) => {
             n2o.log(evt)
             let data = evt.data
@@ -49,4 +48,15 @@ export default class n2o {
         this.channel = new bullet({url, onmessage, onopen, onclose});
         this.channel.connect()
     }
+    
+    // static uuid4() {
+    //     let s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1)
+    //     return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`
+    // }
+    
+    static uuid4() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16) })
+    }
+    
 }

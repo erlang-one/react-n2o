@@ -8,5 +8,6 @@ import mq     from './src/mq'
 import n2o    from './src/n2o'
 import proto  from './src/proto'
 import utf8   from './src/utf8'
+import ftp   from './src/ftp'
 
-export { bert, bullet, mq, n2o, proto, utf8 }
+export { bert, bullet, mq, n2o, proto, utf8, ftp }

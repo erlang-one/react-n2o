@@ -1,91 +1,138 @@
-// // N2O File Transfer Protocol (React/ES6)
-//
-// 'use strict';
-//
-// import bert from './bert'
-// import n2o from './n2o'
-//
-// export default class ftp {
-//
-//     constructor(c) { c && this.init(c) }
-//
-//     queue: [],
-//     init: function (file) {
-//         var item = {
-//             id: n2o.uuid4(),
-//             status: 'init',
-//             autostart: ftp.autostart || false,
-//             name: ftp.filename || file.name,
-//             sid: ftp.sid || token(),
-//             meta: ftp.meta || bin(client()),
-//             offset: ftp.offset || 0,
-//             block: 1,
-//             total: file.size,
-//             file: file
-//         };
-//         ftp.queue.push(item);
-//         ftp.send(item, '', 1);
-//         return item.id;
-//     },
-//     start: function (id) {
-//         if (ftp.active) { id && (ftp.item(id).autostart = true); return false; }
-//         var item = id ? ftp.item(id) : ftp.next();
-//         if (item) { ftp.active = true; ftp.send_slice(item); }
-//     },
-//     stop: function (id) {
-//         var item = ftp.item(id);
-//         var index = ftp.queue.indexOf(item);
-//         ftp.queue.splice(index, 1);
-//         ftp.active = false;
-//         ftp.start();
-//     },
-//     send: function (item, data) {
-//         wsn.send(enc(tuple(atom('ftp'),
-//             bin(item.id),
-//             bin(item.sid),
-//             bin(item.name),
-//             item.meta,
-//             number(item.total),
-//             number(item.offset),
-//             number(item.block || data.byteLength),
-//             bin(data),
-//             bin(item.status || 'send')
-//         )));
-//     },
-//     send_slice: function (item) {
-//         this.reader = new FileReader();
-//         this.reader.onloadend = function (e) {
-//             var res = e.target, data = e.target.result;
-//             if (res.readyState === FileReader.DONE && data.byteLength > 0) {
-//                 console.log(item);
-//                 ftp.send(item, data);
-//             }
-//         };
-//         this.reader.readAsArrayBuffer(item.file.slice(item.offset, item.offset + item.block));
-//     },
-//     item: function (id) { return ftp.queue.find(function (item) { return item && item.id === id; }); },
-//     next: function () { return ftp.queue.find(function (next) { return next && next.autostart }); }
-// };
-//
-// $file.do = function (rsp) {
-//     var offset = rsp.v[6].v, block = rsp.v[7].v, status = utf8_dec(rsp.v[9].v);
-//     switch (status) {
-//         case 'init':
-//             if(block == 1) return;
-//             var item = ftp.item(utf8_dec(rsp.v[1].v)) || '0';
-//             item.offset = offset;
-//             item.block = block;
-//             item.name = utf8_dec(rsp.v[3].v);
-//             item.status = undefined;
-//             if (item.autostart) ftp.start(item.id);
-//             break;
-//         case 'send':
-//             var x = qi('ftp_status'); if (x) x.innerHTML = offset;
-//             var item = ftp.item(utf8_dec(rsp.v[1].v));
-//             item.offset = offset;
-//             item.block = block;
-//             (block > 0 && ftp.active) ? ftp.send_slice(item) : ftp.stop(item.id)
-//             break;
-//         case 'relay': debugger; if (typeof ftp.relay === 'function') ftp.relay(rsp); break;
-//     }
-// };
+// N2O File Transfer Protocol (React/ES6)
+
+'use strict';
+
+import bert from './bert'
+import n2o from './n2o'
+import proto from './proto'
+import utf8 from './utf8'
+
+class item {
+    constructor({ file, meta, filename, autostart, sid, id, offset }) {
+        this.id = id || n2o.uuid()
+        this.status = 'init'
+        this.autostart = autostart || false
+        this.name = filename || `random-name-${n2o.uuid()}`
+        this.sid = sid || n2o.token(),
+        this.meta = meta || bert.bin(n2o.ensure_token())
+        this.offset = offset || 0
+        this.block = 1
+        this.total = file.size
+        this.file = file
+    }
+}
+
+export default class ftp {
+    
+    /// Interface
+    
+    get type() { return 'protocol' }
+    get name() { return 'ftp' }
+    // get bindings() { return { 'send_file': this.send_file } }
+    set_channel(c) { this.channel = c }
+    
+    on(r) { return this.onmessage(r) }
+    
+    constructor(o = {}) {
+        this.channel = undefined
+        this.active = false
+        this.relay = o.relay
+        this.queue = []
+    }
+    
+    send_file(o) {
+        console.log('FTP DEBUG', this, o)
+        let e = new item(o)
+        this.queue.push(e)
+        this.send(e, '')
+        return e.id
+    }
+    
+    /// Internal
+    
+    start(id) {
+        if (this.active) { id && (this.item(id).autostart = true); return false }
+        let item = id ? this.item(id) : this.next()
+        if (item) { this.active = true; this.send_slice(item) }
+    }
+
+    stop(id) {
+        let item = this.item(id)
+        let index = this.queue.indexOf(item)
+        this.queue.splice(index, 1)
+        this.active = false
+        this.start()
+    }
+
+    send(item, data) {
+        this.channel.send(bert.enc(bert.tuple(
+            bert.atom('ftp'),
+            bert.bin(item.id),
+            bert.bin(item.sid),
+            bert.bin(item.name),
+            item.meta,
+            bert.number(item.total),
+            bert.number(item.offset),
+            bert.number(item.block || data.byteLength),
+            bert.bin(data),
+            bert.bin(item.status || 'send')
+        )))
+    }
+
+    send_slice(item) {
+        let reader = new FileReader()
+        reader.onloadend = e => {
+            let res = e.target, data = e.target.result
+            if (res.readyState === FileReader.DONE && data.byteLength > 0) {
+                console.log(item)
+                this.send(item, data)
+            }
+        }
+        reader.readAsArrayBuffer(item.file.slice(item.offset, item.offset + item.block))
+    }
+
+    item(id) { return this.queue.find(e => (e && e.id === id)) }
+    next()   { return this.queue.find(e => (e && e.autostart)) }
+
+    onmessage(r) {
+        console.log('FTP ONMESSAGE: ',r)
+        if (proto.is(r, 10, 'ftpack')) {
+
+            let offset = r.v[6].v,
+                block  = r.v[7].v,
+                status = utf8.dec(r.v[9].v),
+                item
+
+            switch (status) {
+                case 'init':
+                    if(block === 1) return false
+                    item = this.item(utf8.dec(r.v[1].v)) || '0'
+                    item.offset = offset
+                    item.block = block
+                    item.name = utf8.dec(r.v[3].v)
+                    item.status = undefined
+                    if (item.autostart) this.start(item.id)
+                    break
+                case 'send':
+                    // TODO: add callback for user
+                    // let x = qi('ftp_status')
+                    // if (x) x.innerHTML = offset
+                    item = this.item(utf8.dec(r.v[1].v))
+                    console.log('FTP NEXT: ', offset, block)
+                    item.offset = offset
+                    item.block = block
+                    if (block > 0 && this.active) {
+                        this.send_slice(item)
+                    } else {
+                        this.stop(item.id)
+                    }
+                    break
+                case 'relay':
+                    if (typeof this.relay === 'function') this.relay(r)
+                    break
+            }
+            return true
+        }
+        return false
+    }
+}

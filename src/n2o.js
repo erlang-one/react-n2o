@@ -5,17 +5,21 @@
 import bullet from './bullet'
 import proto from './proto'
 import bert from './bert'
+import ftp from './ftp'
 
 window.debug = window.debug || false;
 
 export default class n2o {
-    constructor({ session, host, port, protocols, ssl = true, qs }) {
+    constructor(o) { o && this.init(o) }
+    
+    init({ session, host, port, protocols, ssl = true, qs, emitter }) {
         this.active = false
         this.session = session || "site-sid"
         this.querystring = qs || `/ws${window.location.pathname}${window.location.search}`
         this.host = host || window.location.hostname
         this.port = port ? `:${port}` : ''
-        this.protocols = protocols || [ proto.io ];
+        this.emitter = emitter || (a => a)
+        this.protocols = proto.init(this, protocols || [ new proto.ftp() ])
     }
     
     static log(...o)   { window.debug && console.log(...o) }
@@ -27,7 +31,17 @@ export default class n2o {
         return match ? match[1] : undefined;
     }
     
-    start() {
+    static token() { return localStorage.getItem('token') || '' }
+    static ensure_token(prefix) {
+        let c = localStorage.getItem('token')
+        if (c === null) c = `${prefix}${n2o.uuid()}`
+        localStorage.setItem('token', c)
+        return c 
+    }
+    
+    start(o) {
+        o && this.init(o)
+        
         let url = `${this.ssl ? "wss://" : "ws://"}${this.host}${this.port}${this.querystring}`
         let onmessage = (evt) => {
             n2o.log(evt)
@@ -47,14 +61,22 @@ export default class n2o {
         
         this.channel = new bullet({url, onmessage, onopen, onclose});
         this.channel.connect()
+        console.log('n2o [ws] connected')
     }
     
-    // static uuid4() {
+    stop() {
+        console.log('n2o [ws] stop handler not implemented')
+    }
+    
+    status() { return { active: this.active } }
+    send(m) { this.channel.send(m) }
+    
+    // static uuid() {
     //     let s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1)
     //     return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`
     // }
     
-    static uuid4() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    static uuid() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
         var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16) })
     }

@@ -9,6 +9,18 @@ window.debug = window.debug || false;
 
 export default class proto {
     
+    static init(context, protocols) {
+        protocols.forEach((p) => {
+            protocols[p.name] = p
+            p.set_channel && p.set_channel(context)
+            // Object.entries(p.bindings || {}).forEach(b => context[b[0]] = b[1])
+        })
+        return protocols
+    }
+    
+    static get io() { return io }
+    static get ftp() { return ftp }
+    
     static log(...o) { window.debug && console.log(...o) }
     static is(x, num, name) {
         return x === undefined ? false : (x.t === 106 ? false : (x.v.length === num && x.v[0].v === name));
@@ -16,13 +28,27 @@ export default class proto {
     
     static fold(term, [protocol, ...rest]) {
         if(protocol === undefined) return false
-        return protocol.on(term, protocol.do) ? true : this.fold(term, rest)
+        let action = protocol.on(term)
+        return action ? action : this.fold(term, rest)
     }
     
-    static get io() { return { type: 'protocol', name: 'io', on: this.onio } }
-    static get file() { return { type: 'protocol', name: 'file', on: this.onfile,  } }
+}
+
+class io {
     
-    static onio(r, cb) {
+    /// Interface
+    
+    get type() { return 'protocol' }
+    get name() { return 'io' }
+    // get bindings() { return {} }
+    set_channel(c) { this.channel = c }
+    
+    constructor(o = {}) {
+        this.channel = undefined
+        this.callback = o.callback || (f => f())
+    }
+    
+    on(r) {
         if (proto.is(r, 3, 'io')) {   
             // if (r.v[2].v !== undefined && r.v[2].v[1] !== undefined &&
             //     r.v[2].v.length === 2 && (r.v[2].v[0].v === "Token" || r.v[2].v[0].v === "Auth")) {
@@ -31,34 +57,11 @@ export default class proto {
             //     localStorage.setItem('token', tok)
             // }
             try {
-                eval(utf8.dec(r.v[1].v))
-                if (typeof cb === 'function') cb(r)
+                callback(() => eval(utf8.dec(r.v[1].v)))
                 return true
             }
             catch (e) { console.log(e) }
         }
         return false
     }
-    
-    static onfile(r, cb) {
-        if (proto.is(r, 10, 'ftpack')) {
-            (typeof cb === 'function') && cb(r)
-            return true
-        }
-        return false
-    }
-    
 }
-
-// class file {
-//
-//     get type() { return 'protocol' }
-//     get name() { return 'file' }
-//
-//     constructor() {
-//     }
-//
-//     on() {
-//
-//     }
-// }
